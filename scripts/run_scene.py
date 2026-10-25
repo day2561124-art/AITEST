@@ -13,7 +13,11 @@ SYSTEM = (
     "你只能依照提供的場景安排、人物性格、記憶及知情範圍，"
     "寫出自然的人物台詞、對話反應、動作和旁白。"
     "你不能更改劇情大方向、替角色發明記憶、亂加事件或破壞角色能力。"
-    "直接輸出完成的正文，不要標題、解釋、分析、選項或事後評語。"
+    "保留原作角色的智力、觀察力、推理及戰鬥水準，不得為了配合劇情而降智。"
+    "不要替等待玩家發言的主角擅自決定台詞或重要行動。"
+    "角色可以依本人的動機自由反應，事件因果必須完整。"
+    "避免公式化台詞、說教、重複解釋與抽象謎語。"
+    "直接輸出完成的正文，不要標題、解釋、分析、選項或事後評語."
 )
 
 
@@ -48,7 +52,8 @@ def generate(provider: str, endpoint: str, model: str, messages: list[dict[str, 
         }
         result = post_json(endpoint, payload)
         output = result["choices"][0]["message"].get("content") or ""
-        usage = result.get("usage", {})
+        usage = dict(result.get("usage", {}))
+        usage["finish_reason"] = result["choices"][0].get("finish_reason")
     elif provider == "ollama":
         payload = {
             "model": model,
@@ -89,6 +94,7 @@ def run(args: argparse.Namespace) -> dict:
         "completion_tokens": completion,
         "end_to_end_tokens_per_second": tokens_per_second,
         "characters_generated": len(output),
+        "finish_reason": usage.get("finish_reason"),
         "note": "速度包含提示處理與生成耗時，不是純解碼速度。",
     }
     (out / "metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
