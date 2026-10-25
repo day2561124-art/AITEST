@@ -1,57 +1,72 @@
-# NVIDIA E4B × GitHub Actions CPU 實測
+# AITEST E4B CPU v2｜模型快取 + 雲端批次呼叫介面
 
-按需啟動 NVIDIA Nemotron 3.5 Bolt E4B（Q4_K_M GGUF），產生**繁體中文人物對話及旁白**。
+此專案已在 GitHub Actions 4 vCPU 測過 E4B（版本 v1，run #1 成功）。v2 保留可用的 llama.cpp 模型啟動設定，增加模型快取、可辨認請求 ID、測試場景輸入與呼叫腳本。
 
-這是 **CPU 效能驗證專案**，不是 ChatGPT 與模型已自動串接的正式服務。
+## 部署（Windows PowerShell，一次即可）
 
-## 上傳到 AITEST（Windows PowerShell）
-
-1. 下載並解壓 `e4b-AITEST-ready.zip` 到 `C:\Users\day25\AITEST`（確認 `.github` 在 AITEST 根目錄中）。
-2. 在 PowerShell 輸入：
-
-   ```powershell
-   cd C:\Users\day25\AITEST
-   git add .
-   git commit -m "Deploy E4B CPU test"
-   git push origin main
-   ```
-
-3. 開啟 https://github.com/day2561124-art/AITEST/actions，選擇 **E4B CPU dialogue and narration test** → **Run workflow**。
-4. 執行完成後到本次執行的 **Artifacts** 下載 `e4b-cpu-result`。
-
-## 檔案說明
-
-- `.github/workflows/e4b-cpu-test.yml`：GitHub Actions 工作流程，手動觸發。
-- `scripts/run_scene.py`：讀場景 JSON，呼叫模型，輸出文本及效能資料。
-- `scripts/wait_for_server.py`：確認 llama.cpp API 模型已完成載入。
-- `samples/test-scene.json`：完全虛構的測試場景，可直接公開。
-- `tests/test_run_scene.py`：不下載模型的 Python 單元測試。
-- `output/scene.md`：E4B 產生的台詞與旁白（Action 執行時產生）。
-- `output/metrics.json`：生成耗時、token 數及速度（Action 執行時產生）。
-
-## 先驗證有沒有跑得動
-
-工作流程會先跑 Python 單元測試，再從 Hugging Face 官方 repo 下載約 **6.18 GB** 的 E4B GGUF 並驗證 SHA-256。
-
-接著用 `ghcr.io/ggml-org/llama.cpp:server` Docker 映像透過 CPU 執行，不用 Ollama，不用 GPU。模型只在當次工作流程內執行，完成就結束。
-
-如有失敗，到 Actions 展開紅色步驟，檢查下載空間、Docker / llama.cpp 模型相容性、RAM 或執行超時；這些問題需以真實執行結果判定。
-
-**公開儲存庫注意事項：** 不要把私人小說正文、角色記憶、API 金鑰提交到 AITEST，測試時先使用內建的虛構場景。GitHub 工作日誌及 Artifact 也可能被其他人存取。後續若要讓 GPT 自動呼叫 E4B，仍需建立安全的私密資料傳輸管道與結果回傳。
-
-## 本機 Ollama 比較
-
-如果你已在本機使用 Ollama 管理 E4B，在 AITEST 根目錄輸入：
+將此 ZIP 解壓到 `C:\Users\day25\AITEST` 根目錄，保留 `.github/workflows` 資料夾：
 
 ```powershell
-ollama list
-python scripts/run_scene.py --provider ollama --model "<以 ollama list 實際名稱取代>" --scene samples/test-scene.json --out output-local
+cd C:\Users\day25\AITEST
+Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\e4b-AITEST-v2.zip" -DestinationPath . -Force
+git add .
+git commit -m "Add E4B model cache and GitHub bridge"
+git push origin main
 ```
 
-最後可比較 `output-local/metrics.json` 與 Actions 的結果。
+打開 https://github.com/day2561124-art/AITEST/actions/workflows/e4b-cpu-test.yml → **Run workflow**。留空 `scene_base64`，會自動使用 `samples/test-scene.json` 的公開測試場景。
 
-## 官方來源
+## 快取如何運作
 
-- [NVIDIA E4B GGUF](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB)
-- [llama.cpp Docker](https://github.com/ggml-org/llama.cpp/blob/master/docs/docker.md)
-- [GitHub-hosted runner 規格](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+- 快取路徑：`models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf`。
+- 首次執行 v2 時：沒有快取，需要下載約 6 GB；工作成功後 `actions/cache@v4` 在清理階段上傳模型到 GitHub Cache。
+- 下一次使用相同 cache key 時：優先還原快取，節省 Hugging Face 下載時間，但仍需從 GitHub Cache 傳輸檔案、校驗 SHA-256、載入模型。
+- 快取不是永久儲存；GitHub 預設 10 GB 免費配額、超過 7 天未使用可被清除。快取儲存/還原效果和速度仍需兩次實測驗證。
+- 此版不會沿用 v1 首次執行的模型檔；v1 當時沒有保存快取。
+
+## 批次呼叫腳本
+
+`scripts/github_bridge.py` 會透過 GitHub Actions REST API：啟動 workflow → 找出對應 run → 等待完成 → 下載 artifact → 擷取生成的 `scene.md` 和 `metrics.json`。
+
+需使用授權的 `GH_TOKEN` 環境變數（**不要把 Token 加入 Git**），權限至少包含工作流程所需的 Actions write，以及讀取執行和 artifacts。
+
+```powershell
+# 範例：在已配置環境變數 GH_TOKEN 的執行環境啟動「公開測試場景」
+python scripts/github_bridge.py --repo day2561124-art/AITEST --out output-github
+```
+
+**安全限制：** AITEST 目前是 **PUBLIC（公開）**。絕對不要把私密小說、角色動態記憶或真正的秘密寫進 `scene_base64`、檔案、輸出或 artifact。Base64 **不是加密**。`github_bridge.py` 會拒絕向公開儲存庫傳送自訂場景，只允許使用內建公開測試場景。
+
+若未來採用私人儲存庫，也必須重新測試硬體：GitHub 標準私人儲存庫 Runner 的 CPU/RAM 規格可能低於公開儲存庫。真實小說仍須評估 API 權限、資料保護及 GitHub Runner 配額。
+
+## GPT ↔ E4B 自動合作的真實進度
+
+- ✅ GitHub Actions 能執行 E4B 並輸出文章（v1 已驗證）。
+- ✅ v2 已實作快取、API 呼叫腳本與請求匹配機制（本地測試通過）。
+- ⏳ v2 尚須推送 GitHub 並再跑兩次，才可確認首次 cache save 和第二次 cache hit。
+- ⏳ 現有 ChatGPT GitHub 連接器目前 **不能直接呼叫 workflow_dispatch**，故此腳本本身**不代表本聊天室已能自動觸發它**。正式整合仍需能調用 GitHub API 的雲端橋接服務或連接器。
+- ⏳ 目前無法安全傳遞正式小說私人資料到公開 AITEST。正式使用需建立保密的端到端流程。
+
+### 資料流
+
+GPT 提供人物資料和劇情場景 → *具備授權的外部橋接程式* 呼叫 GitHub Actions → E4B 完整撰寫所有角色台詞與旁白 → GitHub artifact 回傳 → GPT 取得結果、審核人物連續性 → 確認後更新 Google Drive。
+
+## 本地測試
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## 專案檔案
+
+- `.github/workflows/e4b-cpu-test.yml`：E4B CPU 工作流程（快取＋按需執行）
+- `scripts/prepare_scene.py`：處理公開測試場景的 Base64 JSON 安全解析
+- `scripts/github_bridge.py`：GitHub REST API 觸發 / 下載（需外部環境提供 Token）
+- `scripts/run_scene.py`：E4B 推論與效能量測
+- `scripts/wait_for_server.py`：模型可用性檢測
+- `samples/test-scene.json`：可公開測試的場景
+
+## 參考文件
+
+- https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching
+- https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event

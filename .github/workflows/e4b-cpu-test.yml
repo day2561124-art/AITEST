@@ -1,10 +1,29 @@
 name: E4B CPU dialogue and narration test
+run-name: E4B CPU ${{ inputs.request_id || github.run_number }}
 
 on:
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: 'Optional unique request ID (to match an API call to its run)'
+        required: false
+        type: string
+      scene_base64:
+        description: 'PUBLIC TEST SCENES ONLY. Base64 is NOT encryption. Leave empty for sample.'
+        required: false
+        type: string
+      max_tokens:
+        description: 'Maximum output tokens (CPU test; 64-1000)'
+        type: number
+        default: 720
+        required: true
 
 permissions:
   contents: read
+
+concurrency:
+  group: e4b-cpu-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   e4b-cpu-test:
@@ -16,32 +35,51 @@ jobs:
 
       - name: Display CPU, memory and disk information
         run: |
-          echo "=== CPU ==="
           nproc
-          echo "=== RAM ==="
           free -h
-          echo "=== DISK ==="
           df -h .
 
-      - name: Verify Python scene generation tests
+      - name: Verify Python tests
         run: python3 -m unittest discover -s tests -v
 
-      - name: Download official NVIDIA E4B Q4_K_M model
+      - name: Prepare public test scene
+        env:
+          SCENE_BASE64: ${{ inputs.scene_base64 }}
+        run: |
+          python3 scripts/prepare_scene.py --output input/scene.json
+
+      - name: Restore or save E4B model cache
+        id: model_cache
+        uses: actions/cache@v4
+        with:
+          path: models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf
+          key: nemotron-3.5-bolt-e4b-q4km-c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612-v1
+
+      - name: Download model on cache miss and validate SHA-256
+        id: model_download
         shell: bash
+        env:
+          CACHE_HIT: ${{ steps.model_cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
           mkdir -p models output
-          START=$(date +%s)
-          curl --fail --location --retry 3 --retry-delay 5 \
-            --output models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf \
-            'https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB/resolve/main/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf'
-          echo 'c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612  models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf' | sha256sum -c -
-          FINISH=$(date +%s)
-          echo "download_seconds=$((FINISH - START))" >> "$GITHUB_OUTPUT"
-          echo "$((FINISH - START))" > output/download_seconds.txt
-          echo "Model downloaded and verified in $((FINISH - START)) seconds"
+          start=$(date +%s)
+          model=models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf
+          checksum='c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612'
+          if [[ "$CACHE_HIT" != 'true' || ! -f "$model" ]]; then
+            echo 'Cache miss: fetching official NVIDIA E4B GGUF.'
+            curl --fail --location --retry 3 --retry-delay 5 \
+              --output "$model" \
+              'https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB/resolve/main/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf'
+          else
+            echo 'Cache hit: model restored. Verifying SHA-256.'
+          fi
+          echo "$checksum  $model" | sha256sum -c -
+          seconds=$(( $(date +%s) - start ))
+          printf '%s\n' "$seconds" > output/download_seconds.txt
+          printf '%s\n' "$CACHE_HIT" > output/model_cache_hit.txt
+          echo "download_and_validation_seconds=$seconds" >> "$GITHUB_OUTPUT"
           df -h .
-        id: model_download
 
       - name: Pull llama.cpp CPU server image
         run: docker pull ghcr.io/ggml-org/llama.cpp:server
@@ -64,15 +102,22 @@ jobs:
       - name: Wait for model to be ready
         run: python3 scripts/wait_for_server.py --url http://127.0.0.1:8080/health --timeout 600 --start-file output/model_start_epoch.txt --out output/model_load_seconds.txt
 
-      - name: Generate sample Traditional Chinese dialogue and narration
+      - name: Generate dialogue and narration
+        env:
+          MAX_TOKENS: ${{ inputs.max_tokens }}
         run: |
+          if (( MAX_TOKENS < 64 || MAX_TOKENS > 1000 )); then
+            echo "max_tokens must be 64-1000" >&2
+            exit 1
+          fi
           python3 scripts/run_scene.py \
             --provider llama.cpp \
             --endpoint http://127.0.0.1:8080/v1/chat/completions \
             --model nemotron-bolt \
-            --scene samples/test-scene.json \
+            --scene input/scene.json \
+            --max-tokens "$MAX_TOKENS" \
             --out output
-                    echo '=== BENCHMARK ==='
+          echo '=== BENCHMARK ==='
           cat output/metrics.json
 
       - name: Show troubleshooting details on failure
