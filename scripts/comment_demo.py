@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 from urllib import request, error
 
-REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$")
 MAX_SCENE_CHARS = 12000
 
 
