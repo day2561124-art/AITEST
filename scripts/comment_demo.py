@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Publish only public sample-scene results back to their owner-created GitHub Issue.
+"""Publish publicly visible E4B scene results back to their owner-created Issue.
 
-Do not run this publisher for private scenes or user-supplied workflow inputs.
+Never use this mechanism for credentials or secret personal information.
 """
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ def render_comment(scene: str, metrics: dict, repo: str, run_id: int) -> str:
     speed = metrics.get("end_to_end_tokens_per_second", "unknown")
     return (
         "<!-- e4b-public-demo-result -->\n"
-        "### E4B 公開測試場景｜生成結果\n\n"
-        "**提醒：本留言公開可見，僅使用儲存庫的公開示範場景。**\n\n"
+        "### E4B 場景｜生成結果\n\n"
+        "**提醒：本留言公開可見，場景與生成內容不是私密資料。**\n\n"
         + scene
         + "\n\n---\n"
         + f"生成耗時：{duration} 秒；速度：約 {speed} tokens/s。\n\n"
@@ -74,7 +74,7 @@ def main() -> None:
     metrics = json.loads(args.metrics.read_text(encoding="utf-8"))
     comment = render_comment(scene, metrics, args.repo, args.run_id)
     post_comment(os.environ.get("GITHUB_TOKEN", ""), args.repo, args.issue_number, comment)
-    print("Published public E4B sample output to owner-created Issue.")
+    print("Published E4B output to owner-created Issue.")
 
 
 if __name__ == "__main__":
