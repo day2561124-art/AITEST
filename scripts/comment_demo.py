@@ -26,6 +26,12 @@ def render_comment(scene: str, metrics: dict, repo: str, run_id: int) -> str:
         raise ValueError("Public sample output missing or too long")
     duration = metrics.get("generation_seconds", "unknown")
     speed = metrics.get("end_to_end_tokens_per_second", "unknown")
+    finish_reason = metrics.get("finish_reason")
+    completion_status = (
+        "⚠️ **注意：模型達到 max_tokens 上限，內容可能未寫完，請 GPT 分段續寫及審核。**"
+        if finish_reason == "length"
+        else f"完成原因：{finish_reason or '未提供'}。"
+    )
     return (
         "<!-- e4b-public-demo-result -->\n"
         "### E4B 場景｜生成結果\n\n"
@@ -33,6 +39,7 @@ def render_comment(scene: str, metrics: dict, repo: str, run_id: int) -> str:
         + scene
         + "\n\n---\n"
         + f"生成耗時：{duration} 秒；速度：約 {speed} tokens/s。\n\n"
+        + completion_status + "\n\n"
         + f"執行紀錄：https://github.com/{repo}/actions/runs/{run_id}\n"
     )
 
