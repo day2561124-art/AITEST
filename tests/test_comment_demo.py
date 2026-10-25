@@ -16,6 +16,12 @@ class PublicDemoCommentTests(TestCase):
         self.assertIn("/actions/runs/123", body)
         self.assertIn("公開可見", body)
 
+    def test_warn_when_completion_is_truncated(self):
+        body = mod.render_comment(
+            "未完的一段", {"finish_reason": "length"}, "day2561124-art/AITEST", 123
+        )
+        self.assertIn("max_tokens 上限", body)
+
     def test_refuse_empty_or_oversized_public_result(self):
         for scene in [" ", "字" * 12001]:
             with self.subTest(size=len(scene)), self.assertRaises(ValueError):
