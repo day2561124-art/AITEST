@@ -82,3 +82,16 @@ python3 -m unittest discover -s tests -v
 - scripts/run_scene.py：llama.cpp / Ollama 生成與效能統計。
 - scripts/comment_demo.py：將場景成稿與執行連結回覆至 Issue。
 - scripts/github_bridge.py：授權環境可用的 REST API 觸發與 artifact 下載工具。
+
+
+## 首次正式小說 Google Drive 閉環（2026-10-25）
+
+- 對象：《少女刺客傳》第十三集（進行中），Google Docs：https://docs.google.com/document/d/1ndp1tkA6iERgH7DqT44qWp_eLJJIhjYuHmM0cSWgaXc/edit
+- 原始正式資料：第十三集已寫正文、前集正式世界快照、主角資料卡、夜雀／岸涯小僧／河童／奴良陸生／及川冰麗的個別動態記憶。
+- GPT 交接場景：星期六深夜浮世繪町河堤，陸生到場與夜雀、河童和岸涯小僧對話；山中老人分身保持隱匿，信件未交出。
+- GitHub Issue #5：https://github.com/day2561124-art/AITEST/issues/5
+- GitHub Actions run 40193682403：模型成功生成，結果透過 Issue 留言回傳；finish_reason=stop。
+- GPT 審核修改：修正 E4B 把傷者「正在尋找空屋」誤寫成「已安排完畢」、以及把四國恩怨過早宣告結束的台詞；維持原作人物記憶與主角操作權。
+- 已直接追加到原 Google Docs 第十三集末尾，並透過 get_document_text 讀回驗證：新段落存在、舊段落保留。
+- **第十三集仍進行中，不代表整集已定稿**；因此不將新情節提前升格為完整正式世界快照，也不越權更新角色長期動態記憶。每次接續應以已追加的第十三集正文為第一來源。
+- 改善重點：E4B 偶爾用詞較僵硬、輸出偏短，仍須 GPT 人工語意審核；長文建議分段、進一步調整 Prompt。
