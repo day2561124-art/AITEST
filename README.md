@@ -73,7 +73,7 @@ python3 -m unittest discover -s tests -v
 既有成功紀錄：
 - workflow_dispatch CPU 推論 run 40190247479（快取命中、繁體中文生成）。
 - Issue 公開示範 round-trip run 40191465796（16 項測試、快取命中、Issue 自動回傳）。
-- 自訂場景 Issue 功能以 [E4B SCENE] 入口進行實測。
+- ✅ 自訂場景 Issue #3 / run 40192897622 已成功：19 項 Python 測試、Cache hit、SHA-256 校驗、E4B 撰寫 279 字元並自動回傳 GPT。
 
 ## 核心檔案
 
