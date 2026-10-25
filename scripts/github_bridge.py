@@ -4,8 +4,8 @@
 This is for use in an authorized cloud worker, app, or CLI. Running this script on
 someone's Windows machine does NOT make the ChatGPT conversation able to run it.
 
-For a public repo: DEMO ONLY, with committed public sample scene.
-Private content requires a private repository and suitable confidentiality design.
+Custom scenes are allowed in a public repo only when public visibility is acceptable.
+Never send credentials, private keys, or sensitive personal data.
 """
 from __future__ import annotations
 
@@ -23,11 +23,6 @@ import zipfile
 API = "https://api.github.com"
 WORKFLOW = "e4b-cpu-test.yml"
 ALLOWED_ARTIFACT_FILES = {"scene.md", "metrics.json", "download_seconds.txt", "model_cache_hit.txt", "model_load_seconds.txt", "model_start_epoch.txt"}
-
-
-def require_private_for_custom_scene(is_private: bool, scene_path: Path | None) -> None:
-    if scene_path is not None and not is_private:
-        raise ValueError("Refusing to transmit a custom scene to a PUBLIC repository. Base64 is not encryption. Use the public sample only.")
 
 
 class SafeRedirect(request.HTTPRedirectHandler):
@@ -87,12 +82,11 @@ def run_bridge(args: argparse.Namespace) -> int:
     gh = GitHub(os.environ.get("GH_TOKEN", "") or os.environ.get("GITHUB_TOKEN", ""))
     repo = gh.call("GET", f"/repos/{args.repo}")
     scene_path = Path(args.scene) if args.scene else None
-    require_private_for_custom_scene(repo.get("private", False), scene_path)
     scene_b64 = ""
     if scene_path is not None:
         raw = scene_path.read_bytes()
-        if len(raw) > 32768:
-            raise ValueError("Scene exceeds 32 KiB. Split into smaller scenes.")
+        if len(raw) > 12288:
+            raise ValueError("Scene exceeds 12 KiB. Split into smaller scenes.")
         scene = json.loads(raw.decode("utf-8"))
         if not isinstance(scene, dict) or not isinstance(scene.get("characters"), list):
             raise ValueError("Scene must contain a characters array")
@@ -131,7 +125,7 @@ def run_bridge(args: argparse.Namespace) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default="day2561124-art/AITEST")
-    parser.add_argument("--scene", help="JSON scene file. CUSTOM scenes require a PRIVATE repo.")
+    parser.add_argument("--scene", help="JSON scene file. In PUBLIC repo, scene and generated output are public.")
     parser.add_argument("--out", default="output-github")
     parser.add_argument("--max-tokens", type=int, default=720)
     parser.add_argument("--timeout", type=int, default=5400)
