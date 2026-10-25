@@ -1,0 +1,92 @@
+name: E4B CPU dialogue and narration test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e4b-cpu-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Checkout test scripts
+        uses: actions/checkout@v4
+
+      - name: Display CPU, memory and disk information
+        run: |
+          echo "=== CPU ==="
+          nproc
+          echo "=== RAM ==="
+          free -h
+          echo "=== DISK ==="
+          df -h .
+
+      - name: Verify Python scene generation tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Download official NVIDIA E4B Q4_K_M model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models output
+          START=$(date +%s)
+          curl --fail --location --retry 3 --retry-delay 5 \
+            --output models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf \
+            'https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB/resolve/main/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf'
+          echo 'c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612  models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf' | sha256sum -c -
+          FINISH=$(date +%s)
+          echo "download_seconds=$((FINISH - START))" >> "$GITHUB_OUTPUT"
+          echo "$((FINISH - START))" > output/download_seconds.txt
+          echo "Model downloaded and verified in $((FINISH - START)) seconds"
+          df -h .
+        id: model_download
+
+      - name: Pull llama.cpp CPU server image
+        run: docker pull ghcr.io/ggml-org/llama.cpp:server
+
+      - name: Start E4B CPU server
+        shell: bash
+        run: |
+          set -euo pipefail
+          date +%s > output/model_start_epoch.txt
+          docker run --detach --rm \
+            --name e4b-cpu-test \
+            --publish 127.0.0.1:8080:8080 \
+            --volume "${PWD}/models:/models:ro" \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -m /models/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf \
+            --alias nemotron-bolt \
+            --host 0.0.0.0 --port 8080 \
+            -c 2048 -t 4 -ngl 0 --jinja
+
+      - name: Wait for model to be ready
+        run: python3 scripts/wait_for_server.py --url http://127.0.0.1:8080/health --timeout 600 --start-file output/model_start_epoch.txt --out output/model_load_seconds.txt
+
+      - name: Generate sample Traditional Chinese dialogue and narration
+        run: |
+          python3 scripts/run_scene.py \
+            --provider llama.cpp \
+            --endpoint http://127.0.0.1:8080/v1/chat/completions \
+            --model nemotron-bolt \
+            --scene samples/test-scene.json \
+            --out output
+                    echo '=== BENCHMARK ==='
+          cat output/metrics.json
+
+      - name: Show troubleshooting details on failure
+        if: failure()
+        run: |
+          docker logs --tail 70 e4b-cpu-test || true
+          df -h . || true
+          free -h || true
+
+      - name: Upload generated text and benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e4b-cpu-result
+          path: output/
+          if-no-files-found: warn
+          retention-days: 7
