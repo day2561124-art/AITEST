@@ -48,7 +48,7 @@ def generate(provider: str, endpoint: str, model: str, messages: list[dict[str, 
             "temperature": 1.0,
             "top_p": 0.95,
             "stream": False,
-            "chat_template_kwargs": {"enable_thinking": False, "conversational_mode": True},
+            "chat_template_kwargs": {"enable_thinking": False, "conversational_mode": False},
         }
         result = post_json(endpoint, payload)
         output = result["choices"][0]["message"].get("content") or ""
