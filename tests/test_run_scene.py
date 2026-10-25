@@ -16,7 +16,9 @@ class SceneTests(TestCase):
     def test_prompt_contains_constraints(self):
         scene = {"characters": [{"name": "甲"}], "plot_beats": ["練習"]}
         messages = mod.build_messages(scene)
+        self.assertIn("即時角色扮演", messages[0]["content"])
         self.assertIn("人物台詞", messages[0]["content"])
+        self.assertIn("不是要你改寫成小說", messages[1]["content"])
         self.assertIn("甲", messages[1]["content"])
 
     def test_llama_response_and_output(self):
