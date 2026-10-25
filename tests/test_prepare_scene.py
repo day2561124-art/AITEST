@@ -26,6 +26,25 @@ class PrepareSceneTests(TestCase):
         with self.assertRaises(ValueError):
             mod.decode_input(data)
 
+    def test_public_repo_rejects_custom_scene_before_writing(self):
+        import base64
+        with TemporaryDirectory() as d:
+            s, out = Path(d) / "sample.json", Path(d) / "output.json"
+            s.write_text('{"characters":[]}', encoding="utf-8")
+            encoded = base64.b64encode(b'{"characters":[]}').decode()
+            with self.assertRaisesRegex(ValueError, "PUBLIC repository"):
+                mod.prepare_scene(s, out, encoded, private_repo=False)
+            self.assertFalse(out.exists())
+
+    def test_private_repo_accepts_custom_scene(self):
+        import base64
+        with TemporaryDirectory() as d:
+            s, out = Path(d) / "sample.json", Path(d) / "output.json"
+            s.write_text('{"characters":[]}', encoding="utf-8")
+            encoded = base64.b64encode(b'{"characters":[{"name":"X"}]}').decode()
+            mod.prepare_scene(s, out, encoded, private_repo=True)
+            self.assertEqual(json.loads(out.read_text(encoding="utf-8"))["characters"][0]["name"], "X")
+
     def test_sample_fallback(self):
         with TemporaryDirectory() as d:
             s, out = Path(d) / "sample.json", Path(d) / "output.json"

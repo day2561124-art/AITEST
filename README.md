@@ -43,7 +43,7 @@ python scripts/github_bridge.py --repo day2561124-art/AITEST --out output-github
 
 - ✅ GitHub Actions 能執行 E4B 並輸出文章（v1 已驗證）。
 - ✅ v2 已實作快取、API 呼叫腳本與請求匹配機制（本地測試通過）。
-- ⏳ v2 尚須推送 GitHub 並再跑兩次，才可確認首次 cache save 和第二次 cache hit。
+- ✅ v2 已推送 GitHub，run 40190247479 驗證 11 項測試、模型 cache hit、成功生成 476 字。
 - ⏳ 現有 ChatGPT GitHub 連接器目前 **不能直接呼叫 workflow_dispatch**，故此腳本本身**不代表本聊天室已能自動觸發它**。正式整合仍需能調用 GitHub API 的雲端橋接服務或連接器。
 - ⏳ 目前無法安全傳遞正式小說私人資料到公開 AITEST。正式使用需建立保密的端到端流程。
 
@@ -70,3 +70,20 @@ python -m unittest discover -s tests -v
 
 - https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching
 - https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
+
+## ChatGPT GitHub 連接器｜Issue 公開示範橋接（v3）
+
+ChatGPT GitHub 連接器不提供新建 `workflow_dispatch` 的動作，但可建立 Issue 和讀取留言。
+此版**保留原本手動/API `workflow_dispatch`**，額外支援以下公開示範工作流：
+
+1. GitHub 儲存庫擁有者在 `AITEST` 建立標題以 `[E4B DEMO]` 開頭的 Issue；請勿放入私密正文。
+2. `issues.opened` 事件啟動**同一套 E4B GitHub Actions Runner**，只有 Issue 作者是儲存庫擁有者才會真正執行模型。其他 Issue 直接跳過。
+3. Runner 忽略 Issue 內文，固定讀取已公開的 `samples/test-scene.json`，保留原本模型 SHA-256 驗證與 Cache。
+4. 成功後將公開測試文本與執行網址自動回覆在該 Issue；ChatGPT 可使用 GitHub 連接器直接讀取留言，無須手動下載 ZIP。Artifact 仍會保存七天以利除錯。
+5. 正式小說與人物記憶**禁止**透過公開 Issue、workflow inputs、logs、artifacts 傳輸；Runner 在公開儲存庫收到非空自訂 `scene_base64` 時會主動失敗。
+
+**範例 Issue 標題：** `[E4B DEMO] GPT connector round-trip smoke test`。
+
+安全備註：Issue 和其生成留言是公開資訊。這只用於**證明 ChatGPT ↔ GitHub Actions ↔ E4B ↔ ChatGPT 的整合能力**，不代表私密劇情已安全接通。未來正式創作需使用私密環境或經驗證的雙向加密方案，並確保推論輸出、artifacts、logs 不洩漏明文。
+
+此 Demo 橋接不要求使用者的 GH_TOKEN；GitHub Actions 留言使用工作流程內建的短效 `GITHUB_TOKEN`，限制只需 `issues: write` 與 `contents: read`。

@@ -1,7 +1,9 @@
 name: E4B CPU dialogue and narration test
-run-name: E4B CPU ${{ inputs.request_id || github.run_number }}
+run-name: E4B CPU ${{ github.event_name == 'issues' && format('issue-{0}', github.event.issue.number) || inputs.request_id || github.run_number }}
 
 on:
+  issues:
+    types: [opened]
   workflow_dispatch:
     inputs:
       request_id:
@@ -20,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: e4b-cpu-${{ github.ref }}
@@ -27,6 +30,7 @@ concurrency:
 
 jobs:
   e4b-cpu-test:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '[E4B DEMO]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -44,7 +48,8 @@ jobs:
 
       - name: Prepare public test scene
         env:
-          SCENE_BASE64: ${{ inputs.scene_base64 }}
+          SCENE_BASE64: ${{ github.event_name == 'workflow_dispatch' && inputs.scene_base64 || '' }}
+          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
         run: |
           python3 scripts/prepare_scene.py --output input/scene.json
 
@@ -104,7 +109,7 @@ jobs:
 
       - name: Generate dialogue and narration
         env:
-          MAX_TOKENS: ${{ inputs.max_tokens }}
+          MAX_TOKENS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_tokens || 720 }}
         run: |
           if (( MAX_TOKENS < 64 || MAX_TOKENS > 1000 )); then
             echo "max_tokens must be 64-1000" >&2
@@ -119,6 +124,21 @@ jobs:
             --out output
           echo '=== BENCHMARK ==='
           cat output/metrics.json
+
+      - name: Post public demo result to issue
+        if: ${{ success() && github.event_name == 'issues' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO_FULL_NAME: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 scripts/comment_demo.py \
+            --scene output/scene.md \
+            --metrics output/metrics.json \
+            --repo "$REPO_FULL_NAME" \
+            --issue-number "$ISSUE_NUMBER" \
+            --run-id "$RUN_ID"
 
       - name: Show troubleshooting details on failure
         if: failure()

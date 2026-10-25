@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Prepare only public/test scene data for the public GitHub Actions repo.
+"""Prepare a scene, rejecting custom inputs in a public repository.
 
-The SCENE_BASE64 workflow input is not private or secure. This parser ensures it is
-valid JSON without evaluating scene content as shell code.
+Base64 and GitHub workflow inputs are never a confidentiality mechanism.
 """
 from __future__ import annotations
 
@@ -37,10 +36,12 @@ def decode_input(value: str) -> dict:
     return parse_scene(decoded.decode("utf-8"))
 
 
-def prepare_scene(source: Path, destination: Path, encoded_input: str) -> None:
+def prepare_scene(source: Path, destination: Path, encoded_input: str, private_repo: bool = False) -> None:
+    if encoded_input.strip() and not private_repo:
+        raise ValueError("Refusing custom scene in PUBLIC repository. Base64 is NOT encryption.")
     if encoded_input.strip():
         scene = decode_input(encoded_input.strip())
-        print("Using user-supplied PUBLIC test scene; do not send private text to public Actions.")
+        print("Using custom scene in private repository; avoid logging scene data.")
     else:
         scene = parse_scene(source.read_text(encoding="utf-8"))
         print("Using repository sample scene.")
@@ -53,7 +54,8 @@ def main() -> None:
     parser.add_argument("--sample", default="samples/test-scene.json")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    prepare_scene(Path(args.sample), Path(args.output), os.environ.get("SCENE_BASE64", ""))
+    private_repo = os.environ.get("REPOSITORY_PRIVATE", "").strip().lower() == "true"
+    prepare_scene(Path(args.sample), Path(args.output), os.environ.get("SCENE_BASE64", ""), private_repo=private_repo)
 
 
 if __name__ == "__main__":
